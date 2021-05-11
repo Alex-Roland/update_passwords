@@ -97,14 +97,20 @@ def send_commands(dq, dd, newpass, exos_hash, cisco_hash, kwargs): # Function to
                         log_failed(f'{thread_name} {ip} output: ' + 'Failed password change')
                 elif nc_params['device_type'] == 'cisco_ios':
                     oldhash = re.findall(r'{} privilege 15 secret 5 .*'.format(args.a), nc.send_command('show run | i username')) # Grab the old hash (used to check if the password changed successfully)
+                    oldlinehash = re.findall(r'^ password', nc.send_command('show run | i password | b line'), re.MULTILINE) # Grab the old line hashes (used to check if the password changed successfully)
                     logger(f'{thread_name} {ip} output:\n' + nc.send_command('config t', expect_string=r'config'))
                     output = logger(nc.send_command_timing(f'username {args.a} privilege 15 secret 5 {cisco_hash}'))
                     if 'Can not have both a user password and a user secret' in output:
                         logger(nc.send_command_timing(f'no username {args.a}'))
                         logger(nc.send_command_timing(f'username {args.a} privilege 15 secret 5 {cisco_hash}'))
+                    logger(f'{thread_name} {ip} output:\n' + nc.send_command('line con 0', expect_string=r'config-line'))
+                    logger(nc.send_command_timing(f'password {newpass}'))
+                    logger(f'{thread_name} {ip} output:\n' + nc.send_command('line vty 0 15', expect_string=r'config-line'))
+                    logger(nc.send_command_timing(f'password {newpass}'))
                     logger(f'{thread_name} {ip} output: ' + nc.send_command('end', expect_string=rf'{hostname}'))
                     newhash = re.findall(r'{} privilege 15 secret 5 .*'.format(args.a), nc.send_command('show run | i username')) # Grab the new hash to check if the password changed successfully
-                    if newhash != oldhash:
+                    newlinehash = re.findall(r'^ password', nc.send_command('show run | i password | b line'), re.MULTILINE) # Grab the old line hashes (used to check if the password changed successfully)
+                    if newhash != oldhash and newlinehash != oldlinehash:
                         logger(f'{thread_name} {ip} output:\n' + nc.save_config())
                         logger(f'{thread_name} {ip} output: ' + 'Password changed successfully')
                         log_success(f'{thread_name} {ip} output: ' + 'Password changed successfully')
